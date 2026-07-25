@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Mapping
 
 
 class InputKind(Enum):
@@ -174,12 +174,31 @@ def _resolve_lecture_index(
     return _flat_lecture_index(url, lid, cookies_from_browser, cookies_file)
 
 
+def entry_matches_lecture(entry: Mapping[str, Any], lecture: str) -> bool:
+    """Does this flat-playlist `entry` name lecture id `lecture`?
+
+    The id is matched as a WHOLE ``/lecture/<id>`` path segment. A bare substring test
+    lets a sibling win on a shared prefix — ``"1234567"`` is inside
+    ``".../lecture/12345678"`` — and since the first match wins, that silently returns
+    the index of the WRONG lecture, so glean would transcribe a different video than
+    the URL names with nothing to indicate it.
+
+    In a FULL extraction an entry's `id` is the internal media id rather than the
+    lecture id, so the id field is compared exactly and the URLs by path segment.
+    """
+    if str(entry.get("id")) == lecture:
+        return True
+    segment = re.compile(rf"/lecture/{re.escape(lecture)}(?![0-9])")
+    return any(
+        segment.search(field) for field in (entry.get("url") or "", entry.get("webpage_url") or "")
+    )
+
+
 def _flat_lecture_index(
     url: str, lid: str, cookies_from_browser: str | None, cookies_file: str | Path | None
 ) -> int | None:  # pragma: no cover — network
     """Flat-extract the course (cheap: no per-lecture download) and find the entry
-    carrying `lid`. In a FULL extraction an entry's `id` is the internal media id, so
-    the lecture id is matched against the flat id and the entry url too."""
+    carrying `lid`, matched by `entry_matches_lecture`."""
     import yt_dlp  # noqa: PLC0415 — lazy: heavy import, network-only path
 
     call = build_ydl_opts(
@@ -190,8 +209,8 @@ def _flat_lecture_index(
     with ydl_errors(), patched_path(call.env), yt_dlp.YoutubeDL(call.opts) as ydl:
         info = ydl.extract_info(url, download=False)
     for i, entry in enumerate((info or {}).get("entries") or [], start=1):
-        fields = (str(entry.get("id")), entry.get("url") or "", entry.get("webpage_url") or "")
-        if lid == fields[0] or any(lid in f for f in fields[1:]):
+        # A lazy playlist can yield None for an unavailable entry — skip, don't crash.
+        if entry and entry_matches_lecture(entry, lid):
             return i
     return None
 

@@ -228,3 +228,50 @@ def test_playlist_selection_falls_back_when_lecture_not_found(
     monkeypatch.setattr(source, "_flat_lecture_index", lambda *a, **k: None)
     sel = source.playlist_selection("https://www.udemy.com/course/x/learn/lecture/999")
     assert sel == {"noplaylist": True}
+
+
+# ---- entry matching: the id is a whole path segment, not a substring ---------
+
+_COURSE = "https://www.udemy.com/course/x/learn/lecture"
+
+
+def test_entry_matches_lecture_by_url() -> None:
+    assert source.entry_matches_lecture({"id": "media7", "url": f"{_COURSE}/1234567"}, "1234567")
+
+
+def test_entry_matches_lecture_by_webpage_url() -> None:
+    entry = {"id": "media7", "webpage_url": f"{_COURSE}/1234567"}
+    assert source.entry_matches_lecture(entry, "1234567")
+
+
+def test_entry_matches_lecture_by_exact_id() -> None:
+    # A flat extraction can carry the lecture id as the entry id itself.
+    assert source.entry_matches_lecture({"id": "1234567"}, "1234567")
+
+
+def test_longer_sibling_id_is_not_a_match() -> None:
+    # THE BUG: `lid in url` made "1234567" match ".../lecture/12345678". First match
+    # wins, so glean silently transcribed a DIFFERENT lecture than the URL named.
+    assert not source.entry_matches_lecture({"id": "m", "url": f"{_COURSE}/12345678"}, "1234567")
+
+
+def test_prefix_id_is_not_matched_by_a_longer_request() -> None:
+    assert not source.entry_matches_lecture({"id": "m", "url": f"{_COURSE}/1234"}, "12345")
+
+
+def test_id_substring_elsewhere_in_the_url_is_not_a_match() -> None:
+    # The course slug happens to contain the digits — not a lecture match.
+    entry = {"id": "m", "url": "https://www.udemy.com/course/1234567/learn/lecture/99"}
+    assert not source.entry_matches_lecture(entry, "1234567")
+
+
+def test_entry_with_no_url_fields_does_not_match() -> None:
+    assert not source.entry_matches_lecture({"id": "m"}, "1234567")
+
+
+def test_colliding_siblings_resolve_to_the_requested_lecture() -> None:
+    # End-to-end over the ordering that made the bug bite: the longer-id sibling comes
+    # FIRST, so a substring match returned index 1 instead of 2.
+    entries = [{"id": "a", "url": f"{_COURSE}/12345678"}, {"id": "b", "url": f"{_COURSE}/1234567"}]
+    hits = [i for i, e in enumerate(entries, start=1) if source.entry_matches_lecture(e, "1234567")]
+    assert hits == [2]
