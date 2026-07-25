@@ -23,7 +23,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from glean import asr, fetch, frames, source
+from glean import asr, fetch, frames, markdown, source
 from glean.source import InputKind
 from glean.transcribe import transcribe
 
@@ -56,20 +56,28 @@ def _has_cookies(args: argparse.Namespace) -> bool:
 
 
 def _error_text(exc: RuntimeError, src: source.Source, args: argparse.Namespace) -> str:
-    """Render a failed grab. yt-dlp diagnostics only make sense for a URL; a local-file
-    error (e.g. a missing `asr` extra) is surfaced verbatim, not blamed on yt-dlp
-    (review finding 2).
+    """Render a failed grab. yt-dlp diagnostics only make sense for a failure that came
+    *from* yt-dlp: a local-file error (e.g. a missing `asr` extra — review finding 2)
+    and an empty transcript are glean's own, already-actionable messages, so they are
+    surfaced verbatim rather than prefixed "yt-dlp failed for …".
     """
-    if src.is_url:
+    if src.is_url and not isinstance(exc, markdown.EmptyTranscriptError):
         return source.friendly_ydl_error(exc, args.input, has_cookies=_has_cookies(args))
     return str(exc)
 
 
 def _cmd_frames(args: argparse.Namespace) -> int:
     src = source.classify(args.input)
-    seconds = [frames.parse_ts(a) for a in args.at]
-    for w in args.window:
-        seconds.extend(frames.expand_window(w, args.every))
+    # parse_ts / expand_window reject bad input with a ValueError carrying an already
+    # actionable message — but nothing caught it, so an ordinary typo ("--at 1:2:3:4",
+    # a backwards window, "--every 0") printed a raw traceback instead. Funnel it to
+    # SystemExit like every other user-facing error in the tool.
+    try:
+        seconds = [frames.parse_ts(a) for a in args.at]
+        for w in args.window:
+            seconds.extend(frames.expand_window(w, args.every))
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
     if not seconds:
         raise SystemExit("nothing to grab — pass --at TS (repeatable) and/or --window A-B")
     out_dir = args.out or Path("frames")

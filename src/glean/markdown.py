@@ -18,6 +18,18 @@ from typing import Literal
 CaptionKind = Literal["manual", "auto"]
 
 
+class EmptyTranscriptError(RuntimeError):
+    """Raised when there are no cues to render — refuse to write an empty transcript.
+
+    Every provenance (captions, ASR-from-URL, ASR-from-file) renders through
+    `to_markdown`, so this is the one place that can catch a zero-cue result for all
+    of them. Without it a malformed caption track produced a *confident* file — a
+    header asserting "author-provided subtitles", a duration of "~0h0m" and no
+    content — and the CLI cheerfully reported "wrote transcript.md (8 lines)". A
+    silently wrong answer is worse than a loud failure.
+    """
+
+
 def _source_ref(source: str, *, is_url: bool) -> str:
     """Render the source: ``<url>`` for URLs, an inline code span for local paths."""
     return f"<{source}>" if is_url else f"`{source}`"
@@ -37,8 +49,19 @@ def to_markdown(
     track); provenance names the model. Otherwise `caption_kind` distinguishes an
     author-provided ("manual") track from an auto-generated one. `is_url` controls
     how the source is rendered (URL vs local path — review M3).
+
+    Raises `EmptyTranscriptError` if there is nothing to render.
     """
-    dur = cues[-1][0] if cues else 0
+    if not cues:
+        cause = (
+            "the audio produced no speech"
+            if asr_model
+            else "the caption track parsed to zero cues — malformed VTT, or a layout "
+            "this cleaner does not recognise"
+        )
+        hint = "" if asr_model else " Re-run with --asr to transcribe the audio locally instead."
+        raise EmptyTranscriptError(f"no transcript content for {source} — {cause}.{hint}")
+    dur = cues[-1][0]
     span = f"~{dur // 3600}h{(dur % 3600) // 60}m"
     ref = _source_ref(source, is_url=is_url)
     if asr_model:

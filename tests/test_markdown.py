@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from glean import markdown
 
 
@@ -48,6 +50,28 @@ def test_local_path_source_rendered_as_code_span() -> None:
     assert "</home/me/lecture.mp4>" not in md
 
 
-def test_empty_cues_span_is_zero() -> None:
-    md = markdown.to_markdown([], source="http://x")
-    assert "~0h0m" in md
+def test_empty_cues_refuse_to_render() -> None:
+    # Zero cues used to render a CONFIDENT empty file — a header asserting provenance,
+    # "~0h0m", no content — and the CLI reported "wrote transcript.md (8 lines)".
+    # A silently wrong answer is worse than a loud failure.
+    with pytest.raises(markdown.EmptyTranscriptError, match="no transcript content"):
+        markdown.to_markdown([], source="http://x")
+
+
+def test_empty_cues_error_points_at_asr_for_the_caption_path() -> None:
+    with pytest.raises(markdown.EmptyTranscriptError, match=r"--asr") as ei:
+        markdown.to_markdown([], source="http://x", caption_kind="manual")
+    assert "caption track parsed to zero cues" in str(ei.value)
+
+
+def test_empty_cues_error_is_asr_shaped_when_asr_was_used() -> None:
+    # The ASR path has no caption track to blame and no --asr to suggest.
+    with pytest.raises(markdown.EmptyTranscriptError) as ei:
+        markdown.to_markdown([], source="/lecture.mp4", is_url=False, asr_model="medium.en")
+    assert "no speech" in str(ei.value)
+    assert "--asr" not in str(ei.value)
+
+
+def test_empty_transcript_error_is_a_runtimeerror() -> None:
+    # The CLI funnels on RuntimeError; a bare Exception would escape as a traceback.
+    assert issubclass(markdown.EmptyTranscriptError, RuntimeError)

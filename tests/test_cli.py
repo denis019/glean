@@ -282,6 +282,50 @@ def test_frames_cookies_reach_extract(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---- misc --------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (["--at", "1:2:3:4"], "bad timestamp"),
+        (["--at", "nonsense"], "bad timestamp"),
+        (["--window", "2500"], "want A-B"),
+        (["--window", "9:00-8:00"], "before start"),
+        (["--window", "1:00-2:00", "--every", "0"], "positive"),
+    ],
+)
+def test_bad_timestamps_exit_cleanly(argv: list[str], expected: str, tmp_path: Path) -> None:
+    # parse_ts / expand_window raise ValueError with an already-actionable message, but
+    # nothing caught it — an ordinary typo printed a raw Python traceback. It must come
+    # out as SystemExit like every other user-facing error in the tool.
+    with pytest.raises(SystemExit, match=expected):
+        cli.main(["frames", _local_file(tmp_path), *argv])
+
+
+def test_empty_transcript_is_not_blamed_on_yt_dlp(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A zero-cue caption track is glean's own failure; prefixing it "yt-dlp failed for"
+    # would point the user at the wrong thing entirely.
+    monkeypatch.setattr(
+        captions,
+        "fetch_captions",
+        lambda url, lang="en", **kw: ("WEBVTT\n\nNOTE nothing parseable here\n", "manual"),
+    )
+    with pytest.raises(SystemExit) as ei:
+        cli.main(["transcribe", "https://x.com/v"])
+    assert "yt-dlp failed" not in str(ei.value)
+    assert "no transcript content" in str(ei.value)
+    assert "--asr" in str(ei.value)
+
+
+def test_empty_transcript_writes_no_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Nothing on disk: the old behaviour wrote a header-only file and reported success.
+    monkeypatch.setattr(
+        captions, "fetch_captions", lambda url, lang="en", **kw: ("WEBVTT\n\n", "auto")
+    )
+    out = tmp_path / "t.md"
+    with pytest.raises(SystemExit):
+        cli.main(["transcribe", "https://x.com/v", "-o", str(out)])
+    assert not out.exists()
+
+
 def test_no_subcommand_exits() -> None:
     with pytest.raises(SystemExit):
         cli.main([])
