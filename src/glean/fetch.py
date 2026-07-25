@@ -21,7 +21,7 @@ def download_media(
     fmt: str = "best",
     cookies_from_browser: str | None = None,
     cookies_file: str | None = None,
-) -> Path:  # pragma: no cover — network
+) -> Path:
     """Download the full media for `url` and KEEP it. Returns the written path.
 
     `out` is a target **directory** (→ ``<title>.<ext>``) or a **file path** (its
@@ -46,12 +46,23 @@ def download_media(
         info = ydl.extract_info(url)
         entry = info["entries"][0] if info and info.get("entries") else info
         produced = Path(ydl.prepare_filename(entry)) if entry else None
-    if produced and produced.exists():
+    if produced is None:
+        raise RuntimeError(f"fetch produced no file for {url}")
+    if produced.exists():
         return produced
     # An HLS/merge remux can change the extension from what prepare_filename guessed;
-    # fall back to the newest file matching the stem.
-    parent = out if out.is_dir() else out.parent
-    matches = sorted(parent.glob(f"{Path(stem).name}.*"), key=lambda p: p.stat().st_mtime)
-    if matches:
-        return matches[-1]
+    # fall back to the newest sibling sharing its stem.
+    #
+    # Match on `produced`, NOT on `stem`: for a target DIRECTORY — which is the default
+    # (`-o` omitted) and the whole Udemy workflow — `stem` still holds the unexpanded
+    # "%(title)s" template, and globbing that searches for a file *literally* named
+    # "%(title)s.*". It can never match, so the fallback was dead precisely where it
+    # was needed. prepare_filename has already expanded the outtmpl, so its stem is the
+    # real one. Comparing stems also sidesteps glob metacharacters in video titles
+    # (a "Lecture [Part 1]" would have been read as a character class).
+    if not produced.parent.is_dir():
+        raise RuntimeError(f"fetch produced no file for {url}")
+    siblings = [p for p in produced.parent.iterdir() if p.is_file() and p.stem == produced.stem]
+    if siblings:
+        return max(siblings, key=lambda p: p.stat().st_mtime)
     raise RuntimeError(f"fetch produced no file for {url}")
