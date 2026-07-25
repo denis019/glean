@@ -1,0 +1,91 @@
+[project]
+name = "glean"
+version = "0.1.0"
+description = "Source-agnostic study-material extractor: pull a cleaned [mm:ss] transcript (author captions, auto-captions, or local faster-whisper ASR) and still frames out of any yt-dlp-supported video URL or local media file. General-purpose and read-only against sources."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Denis Kovachevich", email = "3921928+denis019@users.noreply.github.com" },
+]
+dependencies = [
+    "yt-dlp>=2024.1",
+]
+
+[project.scripts]
+glean = "glean.cli:main"
+
+[project.optional-dependencies]
+asr = [
+    "faster-whisper>=1.0",
+    "nvidia-cublas-cu12>=12.9.2.10 ; sys_platform == 'linux'",
+    "nvidia-cudnn-cu12>=9.25.0.15 ; sys_platform == 'linux'",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [{ include-group = "lint" }, { include-group = "test" }]
+lint = ["ruff", "ty"]
+test = ["pytest>=8", "pytest-cov>=5"]
+
+# ---- ruff -------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D",        # pydocstyle — local tooling; docstrings optional
+    "COM812",   # missing-trailing-comma — conflicts with formatter
+    "ISC001",   # implicit-str-concat — conflicts with formatter
+    "T201",     # `print` allowed — CLI emits to stdout
+    "PLR2004",  # magic numbers
+    "EM101",    # raw-string-in-exception
+    "EM102",    # f-string-in-exception
+    "TRY003",   # long exception messages
+    "S101",     # assert-used — pytest requires assert
+    "S603",     # subprocess-call — args are code-controlled (ffmpeg + yt-dlp URL)
+    "S607",     # partial-executable-path — ffmpeg is on $PATH (checked via shutil.which)
+    "RUF001",   # ambiguous unicode — −/×/· are load-bearing house style
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test stubs intentionally take interface-shaped args they ignore (ARG001), mirror
+# many-kwarg production signatures (PLR0913), and lazily import yt_dlp inside fakes to
+# raise a real DownloadError without a top-level heavy import (PLC0415).
+"tests/**" = [
+    "S101",
+    "PLR2004",
+    "INP001",
+    "ANN",
+    "SLF001",
+    "ARG005",
+    "ARG001",
+    "PLR0913",
+    "PLC0415",
+]
+# The media entry points carry the shared cookies/deno + model/device kwargs, so
+# they exceed the 5-arg limit by design — keyword-only, not positional soup.
+"src/glean/asr.py" = ["PLR0913"]
+"src/glean/frames.py" = ["PLR0913"]
+"src/glean/transcribe.py" = ["PLR0913"]
+
+# ---- pytest -----------------------------------------------------------------
+
+[tool.pytest.ini_options]
+addopts = "--cov=glean --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["tests"]
+
+# ---- ty ---------------------------------------------------------------------
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.terminal]
+error-on-warning = true

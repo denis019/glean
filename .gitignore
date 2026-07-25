@@ -1,0 +1,15 @@
+.venv/
+.coverage
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+frames/
+
+# `.claude` is gitignored globally in ~/.gitignore (personal default). Opt the
+# skill back in so a fresh clone gets it, but keep the machine-local bits out.
+# ⚠ ROOT-ANCHORED (leading slash): a bare `!.claude/` applies at EVERY level.
+!/.claude/
+/.claude/*
+!/.claude/skills/
+/.claude/settings.local.json
+/.claude/worktrees/
