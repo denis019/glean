@@ -44,6 +44,17 @@ glean fetch      <url>      [-o DIR|FILE] [--format best] [--cookies-from-browse
 - **fetch** — download + **KEEP** the whole video, then transcribe/frames the LOCAL file.
   This is the Udemy answer (below).
 
+## Or call it as MCP tools
+
+The same three are registered as an MCP server (`glean`), so `mcp__glean__transcribe` /
+`_frames` / `_fetch` are equivalent to the CLI — same ladder, same cookies, same errors.
+Argument names match the flags (`video`/`url`, `out`, `at`, `window`, `every`, `fmt`,
+`cookies_from_browser`, `cookies_file`). Prefer them when they're available; fall back to
+`uv run glean` otherwise. **Always pass `out` to `transcribe`** for anything longer than
+a few minutes — the return value is the whole transcript otherwise.
+
+Register (once): `claude mcp add glean -s user -- uv run --project <repo> --extra asr --extra mcp glean-mcp`
+
 ## Sources — the per-source gotchas
 
 **YouTube** — needs **deno** on PATH (`~/.deno/bin`, auto-checked) for downloads: without a
@@ -83,7 +94,8 @@ JS runtime YouTube throttles and audio 403s. deno is a **YouTube-only** need.
 
 - Code: `src/glean/` — `source.py` (classify + `build_ydl_opts` + cookies/deno +
   `playlist_selection`), `captions.py`, `asr.py`, `frames.py`, `fetch.py`, `markdown.py`,
-  `transcribe.py` (the public `transcribe`/`transcribe_url` ladder), `cli.py`.
+  `transcribe.py` (the public `transcribe`/`transcribe_url` ladder), `cli.py`,
+  `mcp_server.py` (the MCP front-end — a second front-end, never a second implementation).
 - Library use: `from glean import transcribe, transcribe_url, frames, asr` — downstream
   callers get the same ladder; don't re-implement media logic against yt-dlp directly.
 - Gates: `uv run pytest -q && uv run ruff check . && uv run ty check src/`.

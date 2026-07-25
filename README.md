@@ -65,6 +65,30 @@ glean transcribe lecture.mp4 -o transcript.md
 glean frames     lecture.mp4 --at 2:30
 ```
 
+## MCP server
+
+The same three commands are exposed as MCP tools, so an agent can call them directly
+instead of shelling out. Register it once:
+
+```
+claude mcp add glean -s user -- uv run --project /path/to/glean --extra asr --extra mcp glean-mcp
+```
+
+`--project` (not `--directory`) deliberately: the server runs out of glean's
+environment but keeps the **caller's** working directory, so a relative `out` lands in
+the project you're working in. Paths come back absolute either way. Drop `-s user` to
+register it for the current project only.
+
+| tool | notes |
+|---|---|
+| `transcribe(video, out?, asr?, model?, device?, lang?, cookies_*)` | returns the markdown, or with `out` a receipt — pass `out` for a full lecture, it is tens of thousands of tokens |
+| `frames(video, at?, window?, every?, out?, label?, fmt?, cookies_*)` | returns the paths written |
+| `fetch(url, out?, fmt?, cookies_*)` | returns the kept path — call this **once** for a paid source, then point the other two at it |
+
+Everything else is shared with the CLI: one ladder, one yt-dlp options builder, one set
+of friendly DRM/403/deno errors. On stdio, stdout is the JSON-RPC stream, so the server
+hands it to the protocol and points every `print` at stderr for the session.
+
 ## Requirements
 
 - **ffmpeg** on `PATH` — for `frames` and (for local ASR) audio decoding.
@@ -96,6 +120,7 @@ glean frames     lecture.mp4 --at 2:30
 | `transcribe.py` | the public author→auto→ASR ladder shared by the CLI and library callers |
 | `markdown.py` | `[mm:ss]` transcript markdown with source-agnostic provenance |
 | `cli.py` | the `transcribe` / `frames` / `fetch` subcommands |
+| `mcp_server.py` | the same three as MCP tools — stdio-safe stdout, `SystemExit` funneled to tool errors |
 
 ## Dev
 

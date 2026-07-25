@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 glean = "glean.cli:main"
+glean-mcp = "glean.mcp_server:main"
 
 [project.optional-dependencies]
 asr = [
@@ -20,6 +21,7 @@ asr = [
     "nvidia-cublas-cu12>=12.9.2.10 ; sys_platform == 'linux'",
     "nvidia-cudnn-cu12>=9.25.0.15 ; sys_platform == 'linux'",
 ]
+mcp = ["mcp>=1.9"]
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
@@ -28,7 +30,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [{ include-group = "lint" }, { include-group = "test" }]
 lint = ["ruff", "ty"]
-test = ["pytest>=8", "pytest-cov>=5"]
+test = ["pytest>=8", "pytest-cov>=5", "mcp>=1.9"]
 
 # ---- ruff -------------------------------------------------------------------
 
@@ -75,6 +77,9 @@ ignore = [
 "src/glean/asr.py" = ["PLR0913"]
 "src/glean/frames.py" = ["PLR0913"]
 "src/glean/transcribe.py" = ["PLR0913"]
+# Each MCP tool re-exposes a whole CLI subcommand's flags as keyword-only params —
+# that IS the tool schema the agent reads, so it cannot be collapsed into fewer args.
+"src/glean/mcp_server.py" = ["PLR0913"]
 
 # ---- pytest -----------------------------------------------------------------
 

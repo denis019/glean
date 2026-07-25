@@ -28,6 +28,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 from urllib.parse import urlparse
 
+from glean.markdown import EmptyTranscriptError
+
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
@@ -258,6 +260,20 @@ def friendly_ydl_error(exc: Exception, target: str, *, has_cookies: bool) -> str
             "`curl -fsSL https://deno.land/install.sh | sh`, then ensure ~/.deno/bin is on PATH."
         )
     return f"yt-dlp failed for {target}: {msg}"
+
+
+def explain(exc: Exception, target: str, *, is_url: bool, has_cookies: bool) -> str:
+    """Render a failed grab as the one line the caller should act on.
+
+    yt-dlp diagnostics only make sense for a failure that came *from* yt-dlp: a
+    local-file error (e.g. a missing `asr` extra) and an empty transcript are glean's
+    own, already-actionable messages, so they are surfaced verbatim rather than
+    prefixed "yt-dlp failed for …". Both front-ends — the CLI and the MCP server —
+    funnel their `RuntimeError`s through here so a DRM wall reads the same either way.
+    """
+    if is_url and not isinstance(exc, EmptyTranscriptError):
+        return friendly_ydl_error(exc, target, has_cookies=has_cookies)
+    return str(exc)
 
 
 @contextmanager

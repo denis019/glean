@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from glean import source
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 # Best VIDEO-ONLY stream, H.264 preferred. Frames need no audio, so a video-only DASH
@@ -52,6 +53,20 @@ def expand_window(text: str, every: int) -> list[int]:
     if hi < lo:
         raise ValueError(f"window end {hi_s} is before start {lo_s}")
     return list(range(lo, hi + 1, every))
+
+
+def collect_seconds(at: Sequence[str], window: Sequence[str], every: int) -> list[int]:
+    """Every second named by the `--at` stamps and the `A-B` windows, in argument order.
+
+    The timestamp grammar is a user-facing contract, so both front-ends (the CLI and
+    the MCP server) resolve it HERE rather than each re-walking `parse_ts` /
+    `expand_window`. Raises `ValueError` with an already-actionable message on a typo;
+    an empty result means the caller named no timestamps at all.
+    """
+    seconds = [parse_ts(a) for a in at]
+    for w in window:
+        seconds.extend(expand_window(w, every))
+    return seconds
 
 
 def frame_name(seconds: int, label: str | None = None) -> str:

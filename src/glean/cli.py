@@ -23,7 +23,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from glean import asr, fetch, frames, markdown, source
+from glean import asr, fetch, frames, source
 from glean.source import InputKind
 from glean.transcribe import transcribe
 
@@ -56,14 +56,8 @@ def _has_cookies(args: argparse.Namespace) -> bool:
 
 
 def _error_text(exc: RuntimeError, src: source.Source, args: argparse.Namespace) -> str:
-    """Render a failed grab. yt-dlp diagnostics only make sense for a failure that came
-    *from* yt-dlp: a local-file error (e.g. a missing `asr` extra — review finding 2)
-    and an empty transcript are glean's own, already-actionable messages, so they are
-    surfaced verbatim rather than prefixed "yt-dlp failed for …".
-    """
-    if src.is_url and not isinstance(exc, markdown.EmptyTranscriptError):
-        return source.friendly_ydl_error(exc, args.input, has_cookies=_has_cookies(args))
-    return str(exc)
+    """Render a failed grab (review finding 2) — argparse-shaped view of `source.explain`."""
+    return source.explain(exc, args.input, is_url=src.is_url, has_cookies=_has_cookies(args))
 
 
 def _cmd_frames(args: argparse.Namespace) -> int:
@@ -73,9 +67,7 @@ def _cmd_frames(args: argparse.Namespace) -> int:
     # a backwards window, "--every 0") printed a raw traceback instead. Funnel it to
     # SystemExit like every other user-facing error in the tool.
     try:
-        seconds = [frames.parse_ts(a) for a in args.at]
-        for w in args.window:
-            seconds.extend(frames.expand_window(w, args.every))
+        seconds = frames.collect_seconds(args.at, args.window, args.every)
     except ValueError as e:
         raise SystemExit(str(e)) from e
     if not seconds:
